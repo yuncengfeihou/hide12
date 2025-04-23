@@ -1,10 +1,11 @@
+// index.js (已添加详细日志)
 import { extension_settings, loadExtensionSettings, getContext } from "../../../extensions.js";
-import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js";
+import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js"; // <-- Added getRequestHeaders
 
-const extensionName = "star12";
-const LOG_PREFIX = `[${extensionName} LOG]`; // 日志前缀
-const ERR_PREFIX = `[${extensionName} ERR]`; // 错误日志前缀
+const extensionName = "hide-helper";
 const defaultSettings = {
+    // 保留全局默认设置用于向后兼容
+    // 注意：hideLastN 和 lastAppliedSettings 现在将存储在角色/群组数据中，而不是这里
     enabled: true
 };
 
@@ -18,44 +19,45 @@ const domCache = {
     currentValueDisplay: null,
     // 初始化缓存
     init() {
-        console.log(`${LOG_PREFIX} Initializing DOM Cache...`);
+        console.debug(`[${extensionName} DEBUG] Initializing DOM cache.`);
         this.hideLastNInput = document.getElementById('hide-last-n');
         this.saveBtn = document.getElementById('hide-save-settings-btn');
         this.currentValueDisplay = document.getElementById('hide-current-value');
-        console.log(`${LOG_PREFIX} DOM Cache initialized:`, this);
+        console.debug(`[${extensionName} DEBUG] DOM cache initialized:`, {
+            hideLastNInput: !!this.hideLastNInput,
+            saveBtn: !!this.saveBtn,
+            currentValueDisplay: !!this.currentValueDisplay
+        });
     }
 };
 
 // 获取优化的上下文
 function getContextOptimized() {
+    console.debug(`[${extensionName} DEBUG] Entering getContextOptimized.`);
     if (!cachedContext) {
-        console.log(`${LOG_PREFIX} Context cache miss. Getting new context.`);
+        console.debug(`[${extensionName} DEBUG] Context cache miss. Calling getContext().`);
         cachedContext = getContext();
-        if (!cachedContext) {
-            console.warn(`${LOG_PREFIX} getContext() returned null/undefined.`);
-        } else {
-             console.log(`${LOG_PREFIX} Context cached. charId=${cachedContext.characterId}, groupId=${cachedContext.groupId}, chatLength=${cachedContext.chat?.length}`);
-        }
+        console.debug(`[${extensionName} DEBUG] Context fetched:`, cachedContext ? `CharacterId: ${cachedContext.characterId}, GroupId: ${cachedContext.groupId}, Chat Length: ${cachedContext.chat?.length}` : 'null');
     } else {
-        // console.log(`${LOG_PREFIX} Context cache hit.`); // 减少冗余日志
+        console.debug(`[${extensionName} DEBUG] Context cache hit.`);
     }
     return cachedContext;
 }
 
 // 初始化扩展设置 (仅包含全局启用状态)
 function loadSettings() {
-    console.log(`${LOG_PREFIX} Loading global extension settings...`);
+    console.log(`[${extensionName}] Entering loadSettings.`);
     extension_settings[extensionName] = extension_settings[extensionName] || {};
     if (Object.keys(extension_settings[extensionName]).length === 0 || typeof extension_settings[extensionName].enabled === 'undefined') {
-        console.log(`${LOG_PREFIX} Initializing default global settings.`);
+        console.log(`[${extensionName}] Initializing default settings.`);
         extension_settings[extensionName].enabled = defaultSettings.enabled;
     }
-    console.log(`${LOG_PREFIX} Global settings loaded:`, extension_settings[extensionName]);
+    console.log(`[${extensionName}] Settings loaded:`, extension_settings[extensionName]);
 }
 
 // 创建UI面板 - 修改为简化版本，只有开启/关闭选项
 function createUI() {
-    console.log(`${LOG_PREFIX} Creating UI elements...`);
+    console.log(`[${extensionName}] Entering createUI.`);
     const settingsHtml = `
     <div id="hide-helper-settings" class="hide-helper-container">
         <div class="inline-drawer">
@@ -80,8 +82,8 @@ function createUI() {
     </div>`;
 
     // 将UI添加到SillyTavern扩展设置区域
+    console.log(`[${extensionName}] Appending settings UI to #extensions_settings.`);
     $("#extensions_settings").append(settingsHtml);
-    console.log(`${LOG_PREFIX} Settings panel added to extensions settings.`);
 
     // 创建聊天输入区旁边的按钮
     createInputWandButton();
@@ -92,12 +94,15 @@ function createUI() {
     // 设置事件监听器
     setupEventListeners();
 
-    // 初始化DOM缓存 (延迟确保元素存在)
-    setTimeout(() => domCache.init(), 500); // 稍微增加延迟
+    // 初始化DOM缓存
+    console.log(`[${extensionName}] Scheduling DOM cache initialization.`);
+    setTimeout(() => domCache.init(), 100);
+    console.log(`[${extensionName}] Exiting createUI.`);
 }
 
 // 新增：创建输入区旁的按钮
 function createInputWandButton() {
+    console.log(`[${extensionName}] Entering createInputWandButton.`);
     const buttonHtml = `
     <div id="hide-helper-wand-button" class="list-group-item flex-container flexGap5" title="隐藏助手">
         <span style="padding-top: 2px;">
@@ -106,12 +111,14 @@ function createInputWandButton() {
         <span>隐藏助手</span>
     </div>`;
 
+    console.log(`[${extensionName}] Appending wand button to #data_bank_wand_container.`);
     $('#data_bank_wand_container').append(buttonHtml);
-    console.log(`${LOG_PREFIX} Wand button added next to input.`);
+    console.log(`[${extensionName}] Exiting createInputWandButton.`);
 }
 
 // 新增：创建弹出对话框
 function createPopup() {
+    console.log(`[${extensionName}] Entering createPopup.`);
     const popupHtml = `
     <div id="hide-helper-popup" class="hide-helper-popup">
         <div class="hide-helper-popup-title">隐藏助手设置</div>
@@ -134,16 +141,17 @@ function createPopup() {
         </div>
     </div>`;
 
+    console.log(`[${extensionName}] Appending popup HTML to body.`);
     $('body').append(popupHtml);
-    console.log(`${LOG_PREFIX} Popup created and appended to body.`);
+    console.log(`[${extensionName}] Exiting createPopup.`);
 }
 
 // 获取当前角色/群组的隐藏设置 (从角色/群组数据读取)
 function getCurrentHideSettings() {
-    console.log(`${LOG_PREFIX} Attempting to get current hide settings...`);
+    console.debug(`[${extensionName} DEBUG] Entering getCurrentHideSettings.`);
     const context = getContextOptimized();
     if (!context) {
-        console.warn(`${LOG_PREFIX} getCurrentHideSettings: Context not available.`);
+        console.warn(`[${extensionName} DEBUG] getCurrentHideSettings: Context not available.`);
         return null;
     }
 
@@ -151,235 +159,248 @@ function getCurrentHideSettings() {
     let target = null;
     let settings = null;
 
-    console.log(`${LOG_PREFIX} getCurrentHideSettings: Context check - isGroup=${isGroup}, charId=${context.characterId}, groupId=${context.groupId}`);
-
     if (isGroup) {
-        if (!context.groups) {
-            console.warn(`${LOG_PREFIX} getCurrentHideSettings: context.groups is missing.`);
-            return null;
-        }
-        target = context.groups.find(x => x.id == context.groupId);
+        console.debug(`[${extensionName} DEBUG] getCurrentHideSettings: Trying to find group with ID: ${context.groupId}`);
+        // 确保 groups 数组存在
+        target = context.groups?.find(x => x.id == context.groupId);
         if (target) {
             // 从 group.data 读取
-            settings = target.data?.hideHelperSettings || null;
-            console.log(`${LOG_PREFIX} getCurrentHideSettings: Found group ${context.groupId}. Raw settings from group.data:`, target.data?.hideHelperSettings);
+            settings = target?.data?.hideHelperSettings || null;
+            console.debug(`[${extensionName} DEBUG] getCurrentHideSettings: Found group. Settings from group.data:`, settings);
         } else {
-            console.warn(`${LOG_PREFIX} getCurrentHideSettings: Group ${context.groupId} not found in context.groups.`);
+            console.warn(`[${extensionName} DEBUG] getCurrentHideSettings: Group ${context.groupId} not found in context.groups.`);
         }
-    } else { // 是角色
-        if (!context.characters) {
-             console.warn(`${LOG_PREFIX} getCurrentHideSettings: context.characters is missing.`);
-             return null;
-        }
-        if (context.characterId !== undefined && context.characterId >= 0 && context.characterId < context.characters.length) {
+    } else {
+        console.debug(`[${extensionName} DEBUG] getCurrentHideSettings: Trying to find character with ID (index): ${context.characterId}`);
+        // 确保 characters 数组和 characterId 存在且有效
+        if (context.characters && context.characterId !== undefined && context.characterId >= 0 && context.characterId < context.characters.length) {
            target = context.characters[context.characterId];
            if (target) {
-                // 从 character.data.extensions 读取 (遵循 V2 卡片规范)
-                settings = target.data?.extensions?.hideHelperSettings || null;
-                console.log(`${LOG_PREFIX} getCurrentHideSettings: Found character index ${context.characterId} (${target.name}). Raw settings from char.data.extensions:`, target.data?.extensions?.hideHelperSettings);
+               // 从 character.data.extensions 读取 (遵循 V2 卡片规范)
+               settings = target?.data?.extensions?.hideHelperSettings || null;
+               console.debug(`[${extensionName} DEBUG] getCurrentHideSettings: Found character ${target.name}. Settings from character.data.extensions:`, settings);
            } else {
-                console.warn(`${LOG_PREFIX} getCurrentHideSettings: Character object at index ${context.characterId} is missing.`);
+               console.warn(`[${extensionName} DEBUG] getCurrentHideSettings: Character object at index ${context.characterId} is invalid.`);
            }
         } else {
-             console.warn(`${LOG_PREFIX} getCurrentHideSettings: Invalid characterId: ${context.characterId}. Characters length: ${context.characters.length}`);
+            console.warn(`[${extensionName} DEBUG] getCurrentHideSettings: Character context invalid (characters array missing, or index out of bounds: ${context.characterId})`);
         }
     }
 
-    console.log(`${LOG_PREFIX} getCurrentHideSettings: Returning settings:`, settings);
+    console.debug(`[${extensionName} DEBUG] Exiting getCurrentHideSettings, returning:`, settings);
     return settings; // 如果找不到目标或数据，返回 null
 }
 
 
 // 保存当前角色/群组的隐藏设置 (通过API持久化)
 async function saveCurrentHideSettings(hideLastN) {
-    const startTime = performance.now();
-    console.log(`${LOG_PREFIX} saveCurrentHideSettings: Attempting to save hideLastN = ${hideLastN}`);
+    console.log(`[${extensionName}] Entering saveCurrentHideSettings with hideLastN: ${hideLastN}`);
     const context = getContextOptimized();
     if (!context) {
-        console.error(`${ERR_PREFIX} saveCurrentHideSettings: Cannot save settings: Context not available.`);
+        console.error(`[${extensionName}] Cannot save settings: Context not available.`);
         return false;
     }
     const isGroup = !!context.groupId;
     const chatLength = context.chat?.length || 0; // 在获取目标前计算，避免目标不存在时出错
-    console.log(`${LOG_PREFIX} saveCurrentHideSettings: Context details - isGroup=${isGroup}, charId=${context.characterId}, groupId=${context.groupId}, currentChatLength=${chatLength}`);
+    console.log(`[${extensionName}] saveCurrentHideSettings: isGroup=${isGroup}, currentChatLength=${chatLength}`);
 
     const settingsToSave = {
         hideLastN: hideLastN >= 0 ? hideLastN : 0, // 确保非负
-        lastProcessedLength: chatLength, // 保存 *当前* 聊天的长度作为基准
-        userConfigured: true // 标记用户已手动配置
+        lastProcessedLength: chatLength,
+        userConfigured: true // 明确标记用户已配置
     };
-    console.log(`${LOG_PREFIX} saveCurrentHideSettings: Settings object to save:`, settingsToSave);
-
-    let targetId = null;
-    let saveUrl = '';
-    let payload = {};
+    console.log(`[${extensionName}] saveCurrentHideSettings: Settings object to save:`, settingsToSave);
 
     if (isGroup) {
-        targetId = context.groupId;
-        console.log(`${LOG_PREFIX} saveCurrentHideSettings: Saving for GROUP ID: ${targetId}`);
-        if (!context.groups) {
-            console.error(`${ERR_PREFIX} saveCurrentHideSettings: context.groups missing, cannot save for group.`);
-            return false;
-        }
-        const group = context.groups.find(x => x.id == targetId);
+        const groupId = context.groupId;
+        console.log(`[${extensionName}] saveCurrentHideSettings: Saving for Group ID: ${groupId}`);
+        // 确保 groups 数组存在
+        const group = context.groups?.find(x => x.id == groupId);
         if (!group) {
-             console.error(`${ERR_PREFIX} saveCurrentHideSettings: Cannot save settings: Group ${targetId} not found in context.`);
+             console.error(`[${extensionName}] Cannot save settings: Group ${groupId} not found in context.`);
              return false;
         }
 
-        // 1. (内存修改 - 用于立即反馈)
+        // 1. (可选) 修改内存对象 (用于即时反馈, 但API保存才是关键)
         group.data = group.data || {};
-        group.data.hideHelperSettings = { ...settingsToSave }; // 创建副本以防意外修改
-        console.log(`${LOG_PREFIX} saveCurrentHideSettings: Updated group object in memory (before API call):`, group);
+        group.data.hideHelperSettings = settingsToSave;
+        console.log(`[${extensionName}] saveCurrentHideSettings: Updated group object in memory (before API call):`, group);
 
-        // 2. 持久化 (准备API请求)
-        saveUrl = '/api/groups/edit';
-        payload = {
-             ...group, // 包含ID和其他所有现有字段
-             data: { // 合并或覆盖 data 字段
-                 ...(group.data || {}), // 保留 data 中其他可能存在的字段
-                 hideHelperSettings: { ...settingsToSave } // 添加或更新我们的设置
-             }
-        };
+        // 2. 持久化 (发送API请求)
+        try {
+             // 构造发送给 /api/groups/edit 的完整群组对象
+             const payload = {
+                 ...group, // 包含ID和其他所有现有字段
+                 data: { // 合并或覆盖 data 字段
+                     ...(group.data || {}), // 保留 data 中其他可能存在的字段
+                     hideHelperSettings: settingsToSave // 添加或更新我们的设置
+                 }
+             };
+
+            console.log(`[${extensionName}] Saving group settings via /api/groups/edit for ${groupId}. Payload:`, JSON.stringify(payload)); // 调试日志
+            const response = await fetch('/api/groups/edit', {
+                method: 'POST',
+                headers: getRequestHeaders(), // 使用 SillyTavern 的辅助函数获取请求头
+                body: JSON.stringify(payload) // 发送整个更新后的群组对象
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[${extensionName}] Failed to save group settings for ${groupId}: ${response.status} ${errorText}`);
+                toastr.error(`保存群组设置失败: ${errorText}`);
+                return false;
+            }
+            console.log(`[${extensionName}] Group settings saved successfully via API for ${groupId}`);
+            return true;
+        } catch (error) {
+            console.error(`[${extensionName}] Error during fetch to save group settings for ${groupId}:`, error);
+            toastr.error(`保存群组设置时发生网络错误: ${error.message}`);
+            return false;
+        }
 
     } else { // 是角色
-        console.log(`${LOG_PREFIX} saveCurrentHideSettings: Saving for CHARACTER index: ${context.characterId}`);
+        console.log(`[${extensionName}] saveCurrentHideSettings: Saving for Character ID (index): ${context.characterId}`);
+        // 确保 characters 数组和 characterId 存在且有效
         if (!context.characters || context.characterId === undefined || context.characterId < 0 || context.characterId >= context.characters.length) {
-             console.error(`${ERR_PREFIX} saveCurrentHideSettings: Cannot save settings: Character context is invalid. charId=${context.characterId}, length=${context.characters?.length}`);
+             console.error(`[${extensionName}] Cannot save settings: Character context is invalid.`);
              return false;
         }
-        const character = context.characters[context.characterId];
+        const characterId = context.characterId; // 这是索引
+        const character = context.characters[characterId];
         if (!character || !character.avatar) {
-            console.error(`${ERR_PREFIX} saveCurrentHideSettings: Cannot save settings: Character or character avatar not found at index ${context.characterId}. Character:`, character);
+            console.error(`[${extensionName}] Cannot save settings: Character or character avatar not found at index ${characterId}.`);
             return false;
         }
-        targetId = character.avatar; // 获取头像文件名作为唯一标识
-         console.log(`${LOG_PREFIX} saveCurrentHideSettings: Saving for CHARACTER AVATAR: ${targetId}`);
+        const avatarFileName = character.avatar; // 获取头像文件名作为唯一标识
+        console.log(`[${extensionName}] saveCurrentHideSettings: Target character avatar: ${avatarFileName}`);
 
-        // 1. (内存修改)
+        // 1. (可选) 修改内存对象
         character.data = character.data || {};
         character.data.extensions = character.data.extensions || {}; // 确保 extensions 对象存在
-        character.data.extensions.hideHelperSettings = { ...settingsToSave }; // 创建副本
-        console.log(`${LOG_PREFIX} saveCurrentHideSettings: Updated character object in memory (before API call):`, character);
+        character.data.extensions.hideHelperSettings = settingsToSave;
+        console.log(`[${extensionName}] saveCurrentHideSettings: Updated character object in memory (before API call):`, character);
 
-
-        // 2. 持久化 (准备API请求)
-        saveUrl = '/api/characters/merge-attributes';
-        payload = {
-            avatar: targetId, // API 需要知道是哪个角色
-            data: { // 只发送需要更新/合并的部分
-                extensions: {
-                    hideHelperSettings: { ...settingsToSave }
+        // 2. 持久化 (调用 /api/characters/merge-attributes)
+        try {
+            // 构造发送给 /api/characters/merge-attributes 的部分数据
+            const payload = {
+                avatar: avatarFileName, // API 需要知道是哪个角色
+                data: { // 只发送需要更新/合并的部分
+                    extensions: {
+                        hideHelperSettings: settingsToSave
+                    }
                 }
+                // 注意：merge-attributes 会深层合并，所以这样只会更新 hideHelperSettings
+            };
+
+            console.log(`[${extensionName}] Saving character settings via /api/characters/merge-attributes for ${avatarFileName}. Payload:`, JSON.stringify(payload)); // 调试日志
+            const response = await fetch('/api/characters/merge-attributes', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[${extensionName}] Failed to save character settings for ${avatarFileName}: ${response.status} ${errorText}`);
+                toastr.error(`保存角色设置失败: ${errorText}`);
+                return false;
             }
-        };
-    }
-
-    console.log(`${LOG_PREFIX} saveCurrentHideSettings: Sending API request to ${saveUrl} for target ${targetId}. Payload:`, JSON.parse(JSON.stringify(payload))); // Log clean payload
-    try {
-        const response = await fetch(saveUrl, {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify(payload)
-        });
-
-        const duration = performance.now() - startTime;
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`${ERR_PREFIX} saveCurrentHideSettings: Failed to save settings for ${targetId}. Status: ${response.status}. Response: ${errorText}. Duration: ${duration.toFixed(2)}ms`);
-            toastr.error(`保存设置失败: ${response.status} ${errorText}`);
+            console.log(`[${extensionName}] Character settings saved successfully via API for ${avatarFileName}`);
+            return true;
+        } catch (error) {
+            console.error(`[${extensionName}] Error during fetch to save character settings for ${avatarFileName}:`, error);
+            toastr.error(`保存角色设置时发生网络错误: ${error.message}`);
             return false;
         }
-        console.log(`${LOG_PREFIX} saveCurrentHideSettings: Settings saved successfully for ${targetId}. Duration: ${duration.toFixed(2)}ms`);
-        return true;
-    } catch (error) {
-        const duration = performance.now() - startTime;
-        console.error(`${ERR_PREFIX} saveCurrentHideSettings: Network error during fetch to save settings for ${targetId}:`, error, `Duration: ${duration.toFixed(2)}ms`);
-        toastr.error(`保存设置时发生网络错误: ${error.message}`);
-        return false;
     }
 }
 
 // 更新当前设置显示 - 优化使用DOM缓存
 function updateCurrentHideSettingsDisplay() {
-    console.log(`${LOG_PREFIX} updateCurrentHideSettingsDisplay: Updating display...`);
-    const currentSettings = getCurrentHideSettings(); // 会打印内部日志
+    console.debug(`[${extensionName} DEBUG] Entering updateCurrentHideSettingsDisplay.`);
+    const currentSettings = getCurrentHideSettings();
+    console.debug(`[${extensionName} DEBUG] updateCurrentHideSettingsDisplay: Read settings:`, currentSettings);
 
-    if (!domCache.currentValueDisplay || !domCache.hideLastNInput) {
-        console.warn(`${LOG_PREFIX} updateCurrentHideSettingsDisplay: DOM cache not ready, attempting init.`);
-        domCache.init(); // 尝试重新初始化
-        if (!domCache.currentValueDisplay || !domCache.hideLastNInput) {
-            console.error(`${ERR_PREFIX} updateCurrentHideSettingsDisplay: DOM elements still not found after re-init. Aborting update.`);
-            return;
+    if (!domCache.currentValueDisplay) {
+        console.debug(`[${extensionName} DEBUG] updateCurrentHideSettingsDisplay: DOM cache for currentValueDisplay not ready, initializing.`);
+        domCache.init(); // Try initializing if not ready
+        if (!domCache.currentValueDisplay) {
+            console.warn(`[${extensionName} DEBUG] updateCurrentHideSettingsDisplay: currentValueDisplay element still not found after init. Aborting update.`);
+            return; // Abort if still not found
         }
     }
 
     const displayValue = (currentSettings && currentSettings.hideLastN > 0) ? currentSettings.hideLastN : '无';
-    const inputValue = (currentSettings && currentSettings.hideLastN > 0) ? currentSettings.hideLastN : '';
-
-    console.log(`${LOG_PREFIX} updateCurrentHideSettingsDisplay: Setting display text to "${displayValue}", input value to "${inputValue}"`);
+    console.debug(`[${extensionName} DEBUG] updateCurrentHideSettingsDisplay: Setting display text to: "${displayValue}"`);
     domCache.currentValueDisplay.textContent = displayValue;
-    domCache.hideLastNInput.value = inputValue;
-     console.log(`${LOG_PREFIX} updateCurrentHideSettingsDisplay: Display updated.`);
+
+    if (domCache.hideLastNInput) {
+        const inputValue = currentSettings?.hideLastN > 0 ? currentSettings.hideLastN : '';
+        console.debug(`[${extensionName} DEBUG] updateCurrentHideSettingsDisplay: Setting input value to: "${inputValue}"`);
+        domCache.hideLastNInput.value = inputValue;
+    } else {
+        console.debug(`[${extensionName} DEBUG] updateCurrentHideSettingsDisplay: hideLastNInput element not in cache.`);
+    }
+    console.debug(`[${extensionName} DEBUG] Exiting updateCurrentHideSettingsDisplay.`);
 }
 
 // 防抖函数
 function debounce(fn, delay) {
     let timer;
     return function(...args) {
-        const context = this; // 保存上下文
-        console.log(`${LOG_PREFIX} Debounce: Timer cleared for ${fn.name}.`);
+        console.debug(`[${extensionName} DEBUG] Debounce: Clearing timer for ${fn.name}.`);
         clearTimeout(timer);
+        console.debug(`[${extensionName} DEBUG] Debounce: Setting timer for ${fn.name} with delay ${delay}ms.`);
         timer = setTimeout(() => {
-            console.log(`${LOG_PREFIX} Debounce: Timer expired. Executing ${fn.name}.`);
-            fn.apply(context, args);
+            console.debug(`[${extensionName} DEBUG] Debounce: Executing debounced function ${fn.name}.`);
+            fn.apply(this, args);
         }, delay);
     };
 }
 
 // 防抖版本的全量检查
-const runFullHideCheckDebounced = debounce(runFullHideCheck, 300); // 稍微增加延迟给SillyTavern时间反应
+const runFullHideCheckDebounced = debounce(runFullHideCheck, 200);
 
 /**
  * 检查是否应该执行隐藏/取消隐藏操作
- * 只有当插件启用，并且当前角色/群组存在用户配置过的设置时才返回true
+ * 只有当用户明确设置过隐藏规则并且插件启用时才返回true
  */
 function shouldProcessHiding() {
-    // 1. 检查插件是否全局启用
-    if (!extension_settings[extensionName]?.enabled) {
-        // console.log(`${LOG_PREFIX} shouldProcessHiding: Skipping, Plugin globally disabled.`); // 减少噪音
+    console.debug(`[${extensionName} DEBUG] Entering shouldProcessHiding.`);
+    // 检查插件是否启用
+    if (!extension_settings[extensionName].enabled) {
+        console.debug(`[${extensionName} DEBUG] shouldProcessHiding: Plugin is disabled globally. Returning false.`);
         return false;
     }
 
-    // 2. 获取当前设置
-    const settings = getCurrentHideSettings(); // 会打印内部日志
-
-    // 3. 检查是否存在设置以及是否由用户配置过
+    const settings = getCurrentHideSettings();
+    console.debug(`[${extensionName} DEBUG] shouldProcessHiding: Read settings:`, settings);
+    // 如果没有设置，或者用户没有明确配置过，则不处理
     if (!settings || settings.userConfigured !== true) {
-        // console.log(`${LOG_PREFIX} shouldProcessHiding: Skipping, No settings found or 'userConfigured' is not true. Settings:`, settings); // 减少噪音
+        console.debug(`[${extensionName} DEBUG] shouldProcessHiding: No user-configured settings found or settings object missing. Returning false.`);
         return false;
     }
-
-    console.log(`${LOG_PREFIX} shouldProcessHiding: Conditions met. Should process hiding. Settings:`, settings);
-    return true; // 插件已启用且有用户配置
+    console.debug(`[${extensionName} DEBUG] shouldProcessHiding: Plugin enabled and user configured settings found. Returning true.`);
+    return true;
 }
 
 /**
- * 增量隐藏检查 (用于新消息到达) - 几乎不会用到，因为保存时会记录长度，全量检查更可靠
+ * 增量隐藏检查 (用于新消息到达)
  * 仅处理从上次处理长度到现在新增的、需要隐藏的消息
  */
-async function runIncrementalHideCheck() {
-    const startTime = performance.now();
-    console.log(`${LOG_PREFIX} runIncrementalHideCheck: Starting incremental check...`);
-
+async function runIncrementalHideCheck() { // 改为 async 以便调用 saveCurrentHideSettings
+    console.debug(`[${extensionName} DEBUG] Entering runIncrementalHideCheck.`);
+    // 首先检查是否应该执行隐藏操作
     if (!shouldProcessHiding()) {
-        console.log(`${LOG_PREFIX} runIncrementalHideCheck: Aborted by shouldProcessHiding().`);
+        console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: shouldProcessHiding returned false. Skipping.`);
         return;
     }
 
+    const startTime = performance.now();
     const context = getContextOptimized();
     if (!context || !context.chat) {
-        console.warn(`${LOG_PREFIX} runIncrementalHideCheck: Aborted. Context or chat not available.`);
+        console.warn(`[${extensionName} DEBUG] runIncrementalHideCheck: Aborted. Context or chat data not available.`);
         return;
     }
 
@@ -387,172 +408,190 @@ async function runIncrementalHideCheck() {
     const currentChatLength = chat.length;
     const settings = getCurrentHideSettings() || { hideLastN: 0, lastProcessedLength: 0, userConfigured: false }; // 提供默认值
     const { hideLastN, lastProcessedLength = 0 } = settings; // 从 settings 解构
-
-    console.log(`${LOG_PREFIX} runIncrementalHideCheck: currentChatLength=${currentChatLength}, settings=`, settings);
+    console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: currentChatLength=${currentChatLength}, hideLastN=${hideLastN}, lastProcessedLength=${lastProcessedLength}`);
 
     // --- 前置条件检查 ---
-    if (currentChatLength <= 0 || hideLastN <= 0) {
-        console.log(`${LOG_PREFIX} runIncrementalHideCheck: Skipping. Chat empty or hideLastN <= 0.`);
-        // 检查是否需要更新长度 (仅在用户配置过且长度实际变化时)
-        if (settings.userConfigured && currentChatLength !== lastProcessedLength) {
-            console.log(`${LOG_PREFIX} runIncrementalHideCheck: Chat length changed (${lastProcessedLength} -> ${currentChatLength}) but no hiding needed. Updating lastProcessedLength.`);
-            await saveCurrentHideSettings(hideLastN); // 保存以更新长度
+    if (currentChatLength === 0 || hideLastN <= 0) {
+        console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Condition met (currentChatLength === 0 || hideLastN <= 0). Checking if length needs saving.`);
+        if (currentChatLength !== lastProcessedLength && settings.userConfigured) { // 只有当用户配置过且长度变化时才更新长度
+            console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Length changed (${lastProcessedLength} -> ${currentChatLength}) with hideLastN <= 0. Saving settings.`);
+            await saveCurrentHideSettings(hideLastN); // 使用 await 调用异步函数
+        } else {
+             console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Length did not change or not user configured. Skipping save.`);
         }
+        console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Skipping main logic due to condition.`);
         return;
     }
 
     if (currentChatLength <= lastProcessedLength) {
-        console.log(`${LOG_PREFIX} runIncrementalHideCheck: Skipping. Chat length did not increase (${lastProcessedLength} -> ${currentChatLength}). Assuming full check will handle deletes/edits.`);
-        // 不需要更新长度，因为没有新增
+        // 长度未增加或减少，说明可能发生删除或其他异常，应由 Full Check 处理
+        console.warn(`[${extensionName} DEBUG] runIncrementalHideCheck: Skipped. Chat length did not increase or decreased (${lastProcessedLength} -> ${currentChatLength}). Possibly a delete or unexpected state.`);
+        // 重要：如果长度减少了，也需要更新 lastProcessedLength 以免下次增量计算错误
+         if (currentChatLength < lastProcessedLength && settings.userConfigured) {
+            console.warn(`[${extensionName} DEBUG] runIncrementalHideCheck: Chat length decreased. Saving settings with new length.`);
+            await saveCurrentHideSettings(hideLastN); // 保存当前hideLastN和新的chatLength
+         }
         return;
     }
 
     // --- 计算范围 ---
     const targetVisibleStart = Math.max(0, currentChatLength - hideLastN);
-    const previousVisibleStart = Math.max(0, lastProcessedLength - hideLastN); // 处理首次的情况并确保非负
-    console.log(`${LOG_PREFIX} runIncrementalHideCheck: targetVisibleStart=${targetVisibleStart}, previousVisibleStart=${previousVisibleStart}`);
+    const previousVisibleStart = lastProcessedLength > 0 ? Math.max(0, lastProcessedLength - hideLastN) : 0; // 处理首次的情况并确保非负
+    console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Calculated visible range: targetVisibleStart=${targetVisibleStart}, previousVisibleStart=${previousVisibleStart}`);
 
-    const toHideIncrementally = [];
-    // 只有当可见起点向后移动时，才有新的消息需要隐藏
+    // 必须目标 > 先前才有新增隐藏
     if (targetVisibleStart > previousVisibleStart) {
-        const startIndex = previousVisibleStart; // 从上一次可见的开始
-        const endIndex = targetVisibleStart;    // 到这一次可见的开始 (不含)
-        console.log(`${LOG_PREFIX} runIncrementalHideCheck: Checking range [${startIndex}, ${endIndex}) for messages to hide.`);
+        const toHideIncrementally = [];
+        const startIndex = previousVisibleStart; // 直接使用计算好的 previousVisibleStart
+        const endIndex = targetVisibleStart; // 结束索引是新的可见起始点（不包含）
+        console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Need to check messages in range [${startIndex}, ${endIndex}).`);
 
         // --- 收集需要隐藏的消息 ---
         for (let i = startIndex; i < endIndex; i++) {
-            // 检查消息是否存在且不是系统消息 (允许隐藏用户和AI消息)
+            // 允许隐藏用户消息，只检查 is_system === false (更正：应该检查 is_system 是否已经是 true)
+            // 修正逻辑：我们应该隐藏索引 i 的消息，只要它当前不是系统消息
             if (chat[i] && chat[i].is_system !== true) {
                 toHideIncrementally.push(i);
-            } else if (chat[i]) {
-                 console.log(`${LOG_PREFIX} runIncrementalHideCheck: Skipping message index ${i} because it's a system message.`);
+                 console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Adding message ${i} to incremental hide list.`);
             } else {
-                 console.log(`${LOG_PREFIX} runIncrementalHideCheck: Skipping message index ${i} because it's undefined/null.`);
+                 console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Skipping message ${i} (already system or missing).`);
             }
         }
-        console.log(`${LOG_PREFIX} runIncrementalHideCheck: Messages to hide incrementally: [${toHideIncrementally.join(', ')}]`);
 
         // --- 执行批量更新 ---
         if (toHideIncrementally.length > 0) {
-            console.log(`${LOG_PREFIX} runIncrementalHideCheck: Applying incremental hiding...`);
+            console.log(`[${extensionName}] Incrementally hiding messages: Indices [${toHideIncrementally.join(', ')}]`);
+
             // 1. 批量更新数据 (chat 数组)
+            console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Updating chat array data...`);
             toHideIncrementally.forEach(idx => { if (chat[idx]) chat[idx].is_system = true; });
-            console.log(`${LOG_PREFIX} runIncrementalHideCheck: chat array data updated in memory.`);
+            console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Chat array data updated.`);
 
             // 2. 批量更新 DOM
             try {
-                const hideSelector = toHideIncrementally.map(id => `.mes[mesid="${id}"]`).join(',');
+                console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Updating DOM elements...`);
+                // 使用属性选择器
+                const hideSelector = toHideIncrementally.map(id => `.mes[mesid="${id}"]`).join(','); // DOM 选择器需要 .mes
                 if (hideSelector) {
+                    console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Applying selector: ${hideSelector}`);
                     $(hideSelector).attr('is_system', 'true');
-                    console.log(`${LOG_PREFIX} runIncrementalHideCheck: DOM updated for messages: ${toHideIncrementally.join(', ')}`);
+                    console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: DOM update command issued.`);
+                } else {
+                    console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: No DOM elements to update.`);
                 }
             } catch (error) {
-                console.error(`${ERR_PREFIX} runIncrementalHideCheck: Error updating DOM incrementally:`, error);
+                console.error(`[${extensionName}] Error updating DOM incrementally:`, error);
             }
 
-            // 3. 更新处理长度并保存设置（重要：现在需要 await）
-            console.log(`${LOG_PREFIX} runIncrementalHideCheck: Hiding applied. Saving settings to update lastProcessedLength to ${currentChatLength}.`);
-            await saveCurrentHideSettings(hideLastN);
+            // 3. 延迟保存 Chat (包含 is_system 的修改) - SillyTavern 通常有自己的保存机制，这里可能不需要
+            // console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Skipping explicit chat save.`);
+
+            // 4. 更新处理长度并保存设置（重要：现在需要 await）
+            console.log(`[${extensionName}] runIncrementalHideCheck: Saving settings after incremental hide.`);
+            await saveCurrentHideSettings(hideLastN); // 在这里保存更新后的 lastProcessedLength
 
         } else {
-             console.log(`${LOG_PREFIX} runIncrementalHideCheck: No messages needed hiding in the new range.`);
+             console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: No messages needed hiding in the new range [${startIndex}, ${endIndex}).`);
              // 即使没有隐藏，如果长度变了，也需要更新设置中的 lastProcessedLength
-             if (settings.userConfigured && settings.lastProcessedLength !== currentChatLength) {
-                 console.log(`${LOG_PREFIX} runIncrementalHideCheck: Length changed (${lastProcessedLength} -> ${currentChatLength}). Saving settings to update lastProcessedLength.`);
+             if (settings.lastProcessedLength !== currentChatLength && settings.userConfigured) {
+                 console.log(`[${extensionName}] runIncrementalHideCheck: Length changed but no messages hidden. Saving settings.`);
                  await saveCurrentHideSettings(hideLastN);
+             } else {
+                  console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Length did not change or not user configured. Skipping save.`);
              }
         }
     } else {
-        console.log(`${LOG_PREFIX} runIncrementalHideCheck: Visible start did not advance or range invalid.`);
+        console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Visible start did not advance or range invalid (targetVisibleStart <= previousVisibleStart).`);
         // 即使没有隐藏，如果长度变了，也需要更新设置中的 lastProcessedLength
-         if (settings.userConfigured && settings.lastProcessedLength !== currentChatLength) {
-             console.log(`${LOG_PREFIX} runIncrementalHideCheck: Length changed (${lastProcessedLength} -> ${currentChatLength}). Saving settings to update lastProcessedLength.`);
+         if (settings.lastProcessedLength !== currentChatLength && settings.userConfigured) {
+             console.log(`[${extensionName}] runIncrementalHideCheck: Length changed but visible start didn't advance. Saving settings.`);
              await saveCurrentHideSettings(hideLastN);
+         } else {
+              console.debug(`[${extensionName} DEBUG] runIncrementalHideCheck: Length did not change or not user configured. Skipping save.`);
          }
     }
 
-    console.log(`${LOG_PREFIX} runIncrementalHideCheck completed in ${performance.now() - startTime}ms`);
+    console.debug(`[${extensionName} DEBUG] Incremental check completed in ${performance.now() - startTime}ms`);
 }
 
 /**
  * 全量隐藏检查 (优化的差异更新)
  * 用于加载、切换、删除、设置更改等情况
  */
-async function runFullHideCheck() {
-    const startTime = performance.now();
-    console.log(`${LOG_PREFIX} runFullHideCheck: Starting full check...`);
-
+async function runFullHideCheck() { // 改为 async 以便调用 saveCurrentHideSettings
+    console.log(`[${extensionName}] Entering runFullHideCheck.`);
+    // 首先检查是否应该执行隐藏操作
     if (!shouldProcessHiding()) {
-        console.log(`${LOG_PREFIX} runFullHideCheck: Aborted by shouldProcessHiding().`);
-        // 如果是因为插件禁用或未配置，可能需要确保所有消息都可见
-        // 但为了避免意外取消隐藏，暂时不处理，让用户手动取消
+        console.log(`[${extensionName}] runFullHideCheck: shouldProcessHiding returned false. Skipping.`);
         return;
     }
 
+    const startTime = performance.now();
     const context = getContextOptimized();
     if (!context || !context.chat) {
-        console.warn(`${LOG_PREFIX} runFullHideCheck: Aborted. Context or chat not available.`);
+        console.warn(`[${extensionName}] runFullHideCheck: Aborted. Context or chat data not available.`);
         return;
     }
     const chat = context.chat;
     const currentChatLength = chat.length;
+    console.log(`[${extensionName}] runFullHideCheck: Context OK. Chat length: ${currentChatLength}`);
 
     // 加载当前角色的设置
     const settings = getCurrentHideSettings() || { hideLastN: 0, lastProcessedLength: 0, userConfigured: false };
     const { hideLastN } = settings; // 解构 hideLastN
-
-    console.log(`${LOG_PREFIX} runFullHideCheck: currentChatLength=${currentChatLength}, using settings=`, settings);
+    console.log(`[${extensionName}] runFullHideCheck: Loaded settings for current entity: hideLastN=${hideLastN}, userConfigured=${settings.userConfigured}`);
 
     // 1. 计算可见边界
-    const visibleStart = hideLastN <= 0 ? 0 : Math.max(0, currentChatLength - hideLastN);
-    console.log(`${LOG_PREFIX} runFullHideCheck: Calculated visibleStart index = ${visibleStart}`);
+    const visibleStart = hideLastN <= 0
+        ? 0                                         // 不隐藏任何消息
+        : (hideLastN >= currentChatLength
+            ? 0                                     // 如果 N >= 长度，也相当于不隐藏
+            : Math.max(0, currentChatLength - hideLastN)); // 正常计算，确保非负
+    console.log(`[${extensionName}] runFullHideCheck: Calculated visibleStart index: ${visibleStart}`);
+
 
     // 2. 差异计算和数据更新阶段
     const toHide = [];
     const toShow = [];
     let changed = false;
+    console.log(`[${extensionName}] runFullHideCheck: Starting diff calculation...`);
 
-    console.log(`${LOG_PREFIX} runFullHideCheck: Iterating through chat messages (0 to ${currentChatLength - 1}) to determine state...`);
     for (let i = 0; i < currentChatLength; i++) {
         const msg = chat[i];
         if (!msg) {
-            // console.log(`${LOG_PREFIX} runFullHideCheck: Skipping index ${i}, message is null/undefined.`); // 减少噪音
-            continue;
+            console.warn(`[${extensionName} DEBUG] runFullHideCheck: Skipping empty message slot at index ${i}.`);
+            continue; // 跳过空消息槽
         }
 
-        // 修正：SillyTavern 的隐藏是通过添加 is_system=true 实现的
         const isCurrentlyHidden = msg.is_system === true;
-        const shouldBeHidden = i < visibleStart && msg.is_system !== true; // 只有当消息应该隐藏但当前未隐藏时才加入 toHide
-        const shouldBeShown = i >= visibleStart && msg.is_system === true; // 只有当消息应该显示但当前被隐藏时才加入 toShow
+        const shouldBeHidden = i < visibleStart; // 索引小于 visibleStart 的应该隐藏
 
-        // console.log(`${LOG_PREFIX} runFullHideCheck: Index ${i}: isCurrentlyHidden=${isCurrentlyHidden}, shouldBeHidden=${shouldBeHidden}, shouldBeShown=${shouldBeShown}`); // 非常详细，可取消注释
+        // console.debug(`[${extensionName} DEBUG] runFullHideCheck: Index ${i}: isCurrentlyHidden=${isCurrentlyHidden}, shouldBeHidden=${shouldBeHidden}`);
 
-        if (shouldBeHidden) {
-            console.log(`${LOG_PREFIX} runFullHideCheck: Index ${i} marked TO HIDE.`);
-            msg.is_system = true; // 更新内存数据
+        if (shouldBeHidden && !isCurrentlyHidden) {
+             console.debug(`[${extensionName} DEBUG] runFullHideCheck: Index ${i} should be hidden but isn't. Marking to hide.`);
+            msg.is_system = true;
             toHide.push(i);
             changed = true;
-        } else if (shouldBeShown) {
-            console.log(`${LOG_PREFIX} runFullHideCheck: Index ${i} marked TO SHOW.`);
-             // 重要：取消隐藏时，要恢复 is_system 为 false
-             // 我们假设原始的 is_system 状态都是 false（除了真正的系统消息，但我们的逻辑不应该隐藏它们）
-            msg.is_system = false; // 更新内存数据
+        } else if (!shouldBeHidden && isCurrentlyHidden) {
+             console.debug(`[${extensionName} DEBUG] runFullHideCheck: Index ${i} should be shown but is hidden. Marking to show.`);
+            msg.is_system = false;
             toShow.push(i);
             changed = true;
         }
     }
-    console.log(`${LOG_PREFIX} runFullHideCheck: Iteration complete. Found ${toHide.length} messages to hide, ${toShow.length} messages to show. Changed=${changed}`);
+    console.log(`[${extensionName}] runFullHideCheck: Diff calculation done. Changes needed: ${changed}. To hide: ${toHide.length}, To show: ${toShow.length}.`);
 
     // 3. 只有在有更改时才执行DOM更新
     if (changed) {
-        console.log(`${LOG_PREFIX} runFullHideCheck: Applying DOM updates...`);
         try {
+            console.log(`[${extensionName}] runFullHideCheck: Applying DOM updates...`);
             // 批量处理隐藏消息
             if (toHide.length > 0) {
                 const hideSelector = toHide.map(id => `.mes[mesid="${id}"]`).join(',');
                 if (hideSelector) {
+                    console.debug(`[${extensionName} DEBUG] runFullHideCheck: Hiding DOM elements with selector: ${hideSelector}`);
                     $(hideSelector).attr('is_system', 'true');
-                    console.log(`${LOG_PREFIX} runFullHideCheck: DOM HIDE applied to: [${toHide.join(', ')}]`);
                 }
             }
 
@@ -560,414 +599,368 @@ async function runFullHideCheck() {
             if (toShow.length > 0) {
                 const showSelector = toShow.map(id => `.mes[mesid="${id}"]`).join(',');
                 if (showSelector) {
-                    // 确保移除 is_system 属性或设为 false
-                    $(showSelector).attr('is_system', 'false'); // 直接设为 'false' 更明确
-                    console.log(`${LOG_PREFIX} runFullHideCheck: DOM SHOW applied to: [${toShow.join(', ')}]`);
+                    console.debug(`[${extensionName} DEBUG] runFullHideCheck: Showing DOM elements with selector: ${showSelector}`);
+                    $(showSelector).attr('is_system', 'false');
                 }
             }
-            console.log(`${LOG_PREFIX} runFullHideCheck: DOM updates finished.`);
-
-            // 触发 SillyTavern 的滑动按钮更新 (可能需要)
-            if (context.hideSwipeButtons && context.showSwipeButtons) {
-                 console.log(`${LOG_PREFIX} runFullHideCheck: Calling hideSwipeButtons/showSwipeButtons.");
-                 context.hideSwipeButtons();
-                 context.showSwipeButtons();
-            }
-
-            // 触发聊天保存 (Debounced) - 因为我们修改了 chat 数组中的 is_system
-            if (context.saveChatDebounced) {
-                 console.log(`${LOG_PREFIX} runFullHideCheck: Calling saveChatDebounced() because chat data changed.");
-                 context.saveChatDebounced();
-            } else {
-                console.warn(`${LOG_PREFIX} runFullHideCheck: context.saveChatDebounced is not available.`);
-            }
-
+             console.log(`[${extensionName}] runFullHideCheck: DOM updates applied.`);
         } catch (error) {
-            console.error(`${ERR_PREFIX} runFullHideCheck: Error updating DOM:`, error);
+            console.error(`[${extensionName}] Error updating DOM in full check:`, error);
         }
     } else {
-        console.log(`${LOG_PREFIX} runFullHideCheck: No changes detected, skipping DOM updates and save.`);
+         console.log(`[${extensionName}] runFullHideCheck: No changes needed in chat data or DOM based on current settings.`);
     }
 
-    // 4. 更新处理长度并保存设置（只有在用户配置过且长度与记录不符时）
-    // 这一步确保 lastProcessedLength 与当前状态同步，即使没有消息被隐藏/显示
-    if (settings.userConfigured && settings.lastProcessedLength !== currentChatLength) {
-        console.log(`${LOG_PREFIX} runFullHideCheck: Chat length (${currentChatLength}) differs from saved length (${settings.lastProcessedLength}). Updating settings.`);
+    // 4. 更新处理长度并保存设置（如果长度变化且用户已配置）
+    console.log(`[${extensionName}] runFullHideCheck: Checking if settings need saving. lastProcessedLength=${settings.lastProcessedLength}, currentChatLength=${currentChatLength}, userConfigured=${settings.userConfigured}`);
+    if (settings.lastProcessedLength !== currentChatLength && settings.userConfigured) {
+        console.log(`[${extensionName}] runFullHideCheck: Length changed (${settings.lastProcessedLength} -> ${currentChatLength}) and user configured. Saving settings.`);
         await saveCurrentHideSettings(hideLastN); // 使用 await
     } else {
-         console.log(`${LOG_PREFIX} runFullHideCheck: Chat length matches saved length or user has not configured. Skipping settings update.`);
+         console.log(`[${extensionName}] runFullHideCheck: Settings save not required (length unchanged or not user configured).`);
     }
-     console.log(`${LOG_PREFIX} runFullHideCheck completed in ${performance.now() - startTime}ms`);
+    console.log(`[${extensionName}] Full check completed in ${performance.now() - startTime}ms`);
 }
 
 // 新增：全部取消隐藏功能
-async function unhideAllMessages() {
+async function unhideAllMessages() { // 改为 async
     const startTime = performance.now();
-    console.log(`${LOG_PREFIX} unhideAllMessages: Starting unhide all process...`);
+    console.log(`[${extensionName}] Entering unhideAllMessages.`);
     const context = getContextOptimized();
     if (!context || !context.chat) {
-         console.warn(`${LOG_PREFIX} unhideAllMessages: Aborted. Chat data not available.`);
+         console.warn(`[${extensionName}] Unhide all aborted: Chat data not available.`);
+         // 尝试重置设置即使聊天不可用
+         console.log(`[${extensionName}] Unhide all: Attempting to reset hide settings to 0 even though chat is unavailable.`);
+         await saveCurrentHideSettings(0);
+         updateCurrentHideSettingsDisplay(); // 更新UI显示
          return;
     }
     const chat = context.chat;
+    const chatLength = chat.length;
+    console.log(`[${extensionName}] Unhide all: Chat length is ${chatLength}.`);
 
-    if (chat.length === 0) {
-        console.log(`${LOG_PREFIX} unhideAllMessages: Chat is empty.`);
-        // 即使聊天为空，也要确保设置被重置为 0 并保存
-        console.log(`${LOG_PREFIX} unhideAllMessages: Resetting hide setting to 0 and saving.`);
-        await saveCurrentHideSettings(0); // 仍然需要保存重置
-        updateCurrentHideSettingsDisplay();
+    if (chatLength === 0) {
+        console.log(`[${extensionName}] Unhide all: Chat is empty.`);
+        // 即使聊天为空，也要确保设置被重置为 0
+        console.log(`[${extensionName}] Unhide all: Saving hide setting as 0.`);
+        await saveCurrentHideSettings(0);
+        updateCurrentHideSettingsDisplay(); // 更新UI显示
         return;
     }
 
-    // 找出所有当前标记为 is_system=true 的消息 (这些是可能被我们隐藏的)
+    // 找出所有当前是系统消息（可能被隐藏）的消息
     const toShow = [];
-    console.log(`${LOG_PREFIX} unhideAllMessages: Checking chat (length ${chat.length}) for hidden messages (is_system=true)...`);
-    for (let i = 0; i < chat.length; i++) {
-        // 确保只取消隐藏那些 *被我们插件隐藏* 的消息
-        // 真正的系统消息我们不应该修改，但很难区分
-        // 简单起见，我们取消所有 is_system=true 的消息
-        // 更好的方法是记录哪些消息是插件隐藏的，但目前 S T 没有这个机制
+    console.log(`[${extensionName}] Unhide all: Scanning chat for hidden messages...`);
+    for (let i = 0; i < chatLength; i++) {
+        // 检查消息是否存在以及 is_system 是否为 true
         if (chat[i] && chat[i].is_system === true) {
+            console.debug(`[${extensionName} DEBUG] Unhide all: Found hidden message at index ${i}. Marking to show.`);
             toShow.push(i);
         }
     }
-    console.log(`${LOG_PREFIX} unhideAllMessages: Found ${toShow.length} messages to unhide: [${toShow.join(', ')}]`);
+    console.log(`[${extensionName}] Unhide all: Found ${toShow.length} messages to unhide.`);
 
     // 批量更新数据和DOM
     if (toShow.length > 0) {
-        console.log(`${LOG_PREFIX} unhideAllMessages: Applying unhide changes...`);
         // 更新数据
+        console.log(`[${extensionName}] Unhide all: Updating chat array data...`);
         toShow.forEach(idx => { if (chat[idx]) chat[idx].is_system = false; });
-         console.log(`${LOG_PREFIX} unhideAllMessages: chat array data updated in memory.`);
+        console.log(`[${extensionName}] Unhide all: Chat data updated.`);
 
         // 更新DOM
         try {
+            console.log(`[${extensionName}] Unhide all: Updating DOM...`);
             const showSelector = toShow.map(id => `.mes[mesid="${id}"]`).join(',');
             if (showSelector) {
-                $(showSelector).attr('is_system', 'false'); // 明确设为 false
-                console.log(`${LOG_PREFIX} unhideAllMessages: DOM SHOW applied to: [${toShow.join(', ')}]`);
+                 console.debug(`[${extensionName} DEBUG] Unhide all: Applying selector: ${showSelector}`);
+                 $(showSelector).attr('is_system', 'false');
+                 console.log(`[${extensionName}] Unhide all: DOM updated.`);
             }
         } catch (error) {
-            console.error(`${ERR_PREFIX} unhideAllMessages: Error updating DOM when unhiding all:`, error);
+            console.error(`[${extensionName}] Error updating DOM when unhiding all:`, error);
         }
 
-        // 触发相关更新
-         if (context.hideSwipeButtons && context.showSwipeButtons) {
-                 console.log(`${LOG_PREFIX} unhideAllMessages: Calling hideSwipeButtons/showSwipeButtons.");
-                 context.hideSwipeButtons();
-                 context.showSwipeButtons();
-            }
-         if (context.saveChatDebounced) {
-                 console.log(`${LOG_PREFIX} unhideAllMessages: Calling saveChatDebounced() because chat data changed.");
-                 context.saveChatDebounced();
-            } else {
-                 console.warn(`${LOG_PREFIX} unhideAllMessages: context.saveChatDebounced is not available.`);
-            }
-
-        console.log(`${LOG_PREFIX} unhideAllMessages: Unhide changes applied.`);
+        // 保存聊天 - 确认是否必要 (可能不需要，SillyTavern会自己处理)
+        // console.log(`[${extensionName}] Unhide all: Skipping explicit chat save.`);
     } else {
-        console.log(`${LOG_PREFIX} unhideAllMessages: No hidden messages found to unhide.`);
+        console.log(`[${extensionName}] Unhide all: No hidden messages found to change.`);
     }
 
     // 重要修改：重置隐藏设置为0，并通过 API 保存
-    console.log(`${LOG_PREFIX} unhideAllMessages: Resetting hide setting to 0 and saving.`);
+    console.log(`[${extensionName}] Unhide all: Saving hide setting as 0.`);
     const success = await saveCurrentHideSettings(0);
     if (success) {
-        console.log(`${LOG_PREFIX} unhideAllMessages: Successfully saved hide setting reset to 0.`);
+        console.log(`[${extensionName}] Unhide all: Hide setting successfully reset to 0.`);
         updateCurrentHideSettingsDisplay(); // 只有保存成功才更新显示
     } else {
-        console.error(`${ERR_PREFIX} unhideAllMessages: Failed to save hide setting reset to 0.`);
-        toastr.error("无法重置并保存隐藏设置。");
+        console.error(`[${extensionName}] Unhide all: Failed to reset hide setting to 0.`);
+        toastr.error("无法重置隐藏设置。");
     }
-     console.log(`${LOG_PREFIX} unhideAllMessages completed in ${performance.now() - startTime}ms`);
+     console.log(`[${extensionName}] Unhide all completed in ${performance.now() - startTime}ms`);
 }
 
 // 设置UI元素的事件监听器
 function setupEventListeners() {
-    console.log(`${LOG_PREFIX} Setting up event listeners...`);
+    console.log(`[${extensionName}] Entering setupEventListeners.`);
 
     // 设置弹出对话框按钮事件
-    $(document).on('click', '#hide-helper-wand-button', function() {
-        console.log(`${LOG_PREFIX} Wand button clicked.`);
-        if (!extension_settings[extensionName]?.enabled) {
-            console.warn(`${LOG_PREFIX} Wand button click ignored: Plugin disabled.`);
+    console.log(`[${extensionName}] Setting up click listener for #hide-helper-wand-button.`);
+    $('#hide-helper-wand-button').on('click', function() {
+        console.log(`[${extensionName}] Wand button clicked.`);
+        if (!extension_settings[extensionName].enabled) {
+            console.warn(`[${extensionName}] Wand button clicked but extension is disabled.`);
             toastr.warning('隐藏助手当前已禁用，请在扩展设置中启用。');
             return;
         }
-        console.log(`${LOG_PREFIX} Updating display before showing popup...`);
+        console.log(`[${extensionName}] Wand button: Extension enabled. Updating display before showing popup.`);
         updateCurrentHideSettingsDisplay(); // Update display values before showing
 
         const $popup = $('#hide-helper-popup');
-        console.log(`${LOG_PREFIX} Showing popup...`);
+        console.log(`[${extensionName}] Wand button: Displaying popup.`);
         $popup.css({ // 先设置基本样式，位置稍后计算
             'display': 'block',
-            'visibility': 'hidden', // 隐藏以便计算位置
-            'position': 'fixed',   // 使用 fixed 定位
+            'visibility': 'hidden',
+            'position': 'fixed',
             'left': '50%',
-            'transform': 'translateX(-50%)',
-            'top': '50px' // 默认顶部位置，稍后调整
+            'transform': 'translateX(-50%)'
         });
 
         // 确保弹出框内容渲染完成再计算位置
         setTimeout(() => {
-            try {
-                const popupHeight = $popup.outerHeight();
-                const windowHeight = $(window).height();
-                 // 简单的居中逻辑，顶部至少10px，底部至少50px
-                let topPosition = (windowHeight - popupHeight) / 2;
-                topPosition = Math.max(10, topPosition); // 保证顶部至少10px
-                topPosition = Math.min(topPosition, windowHeight - popupHeight - 50); // 保证底部至少50px
-                topPosition = Math.max(10, topPosition); // 再次确保顶部至少10px
-
-                console.log(`${LOG_PREFIX} Centering popup: windowH=${windowHeight}, popupH=${popupHeight}, calculatedTop=${topPosition}`);
-                $popup.css({
-                    'top': topPosition + 'px',
-                    'visibility': 'visible' // 计算完位置再显示
-                });
-            } catch(e) {
-                console.error(`${ERR_PREFIX} Error calculating popup position:`, e);
-                // 出错时也尝试显示
-                $popup.css({'visibility': 'visible'});
-            }
+            console.debug(`[${extensionName} DEBUG] Wand button: Calculating popup position.`);
+            const popupHeight = $popup.outerHeight();
+            const windowHeight = $(window).height();
+            const topPosition = Math.max(10, Math.min((windowHeight - popupHeight) / 2, windowHeight - popupHeight - 50)); // 距底部至少50px
+             console.debug(`[${extensionName} DEBUG] Wand button: Calculated topPosition: ${topPosition}px. Making popup visible.`);
+            $popup.css({
+                'top': topPosition + 'px',
+                'visibility': 'visible'
+            });
         }, 0); // 使用 setTimeout 0 延迟执行
     });
 
     // 弹出框关闭按钮事件
-    $(document).on('click', '#hide-helper-popup-close', function() {
-        console.log(`${LOG_PREFIX} Popup close button clicked.`);
+    console.log(`[${extensionName}] Setting up click listener for #hide-helper-popup-close.`);
+    $('#hide-helper-popup-close').on('click', function() {
+        console.log(`[${extensionName}] Popup close button clicked.`);
         $('#hide-helper-popup').hide();
     });
 
-    // 设置选项更改事件 (全局启用/禁用) - 在 #extensions_settings 内查找
-    $('#extensions_settings').on('change', '#hide-helper-toggle', function() {
+    // 设置选项更改事件 (全局启用/禁用)
+    console.log(`[${extensionName}] Setting up change listener for #hide-helper-toggle.`);
+    $('#hide-helper-toggle').on('change', function() {
         const isEnabled = $(this).val() === 'enabled';
-        console.log(`${LOG_PREFIX} Global toggle changed. New state: ${isEnabled ? 'Enabled' : 'Disabled'}`);
+        console.log(`[${extensionName}] Global toggle changed. New state: ${isEnabled ? 'enabled' : 'disabled'}`);
         extension_settings[extensionName].enabled = isEnabled;
+        console.log(`[${extensionName}] Saving global settings due to toggle change.`);
         saveSettingsDebounced(); // 保存全局设置
 
         if (isEnabled) {
+            console.log(`[${extensionName}] Extension enabled via toggle. Running full check.`);
             toastr.success('隐藏助手已启用');
-            console.log(`${LOG_PREFIX} Plugin enabled. Running full hide check.`);
             // 启用时，执行一次全量检查来应用当前角色的隐藏状态
-            runFullHideCheckDebounced(); // 使用防抖版本
+            runFullHideCheckDebounced();
         } else {
+            console.log(`[${extensionName}] Extension disabled via toggle.`);
             toastr.warning('隐藏助手已禁用');
-            console.log(`${LOG_PREFIX} Plugin disabled. Hiding checks will be skipped.`);
-            // 禁用时，用户可能期望已隐藏的保持隐藏，或者全部取消隐藏？
-            // 当前行为：不自动取消隐藏，保留状态，但不再进行新的隐藏检查。
-            // 如果需要禁用时取消隐藏，可以在这里调用 unhideAllMessages()
-            // unhideAllMessages(); // 取消注释则禁用时会取消所有隐藏
+            // 禁用时，不自动取消隐藏，保留状态 (可以选择在这里运行 unhideAllMessages 来取消隐藏)
+            // console.log(`[${extensionName}] Optional: Consider running unhideAllMessages() here if disable should always unhide.`);
         }
     });
 
-    // 使用事件委托处理动态添加的输入框
-    $(document).on('input', '#hide-last-n', (e) => {
-         const value = parseInt(e.target.value);
-         // console.log(`${LOG_PREFIX} Input changed: raw='${e.target.value}', parsed=${value}`); // 减少噪音
-         if (isNaN(value) || value < 0) {
-             // console.log(`${LOG_PREFIX} Input invalid, clearing.`); // 减少噪音
-             e.target.value = '';
-         } else {
-             e.target.value = value; // 保留有效的非负整数
-         }
-     });
+    const hideLastNInput = document.getElementById('hide-last-n');
 
-    // 优化后的保存设置按钮处理 (使用事件委托)
-    $(document).on('click', '#hide-save-settings-btn', async function() {
-        console.log(`${LOG_PREFIX} Save settings button clicked.`);
-        const $input = $('#hide-last-n'); // 获取输入框
-        if (!$input.length) {
-             console.error(`${ERR_PREFIX} Save button click: Input field #hide-last-n not found.`);
-             return;
-        }
-        const rawValue = $input.val();
-        const value = parseInt(rawValue);
+    if (hideLastNInput) {
+        console.log(`[${extensionName}] Setting up input listener for #hide-last-n.`);
+        // 监听输入变化，确保非负
+        hideLastNInput.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+             console.debug(`[${extensionName} DEBUG] Input field changed. Raw value: "${e.target.value}", Parsed value: ${value}`);
+            // 如果输入无效或小于0，则清空或设为0 (根据偏好选择，这里选择清空)
+            if (isNaN(value) || value < 0) {
+                 console.debug(`[${extensionName} DEBUG] Input invalid or negative. Clearing input field.`);
+                 e.target.value = '';
+            } else {
+                 console.debug(`[${extensionName} DEBUG] Input valid. Keeping value: ${value}`);
+                 e.target.value = value; // 保留有效的非负整数
+            }
+        });
+    } else {
+        console.warn(`[${extensionName}] Could not find #hide-last-n input element to attach listener.`);
+    }
+
+    // 优化后的保存设置按钮处理
+    console.log(`[${extensionName}] Setting up click listener for #hide-save-settings-btn.`);
+    $('#hide-save-settings-btn').on('click', async function() {
+        console.log(`[${extensionName}] Save settings button clicked.`);
+        const value = parseInt(hideLastNInput.value);
         const valueToSave = isNaN(value) || value < 0 ? 0 : value;
-        console.log(`${LOG_PREFIX} Save button click: rawValue='${rawValue}', valueToSave=${valueToSave}`);
+         console.log(`[${extensionName}] Save button: Parsed input value: ${value}. Value to save: ${valueToSave}`);
 
         // 获取当前设置，避免不必要的更新
-        const currentSettings = getCurrentHideSettings(); // 会打印日志
+        const currentSettings = getCurrentHideSettings();
         const currentValue = currentSettings?.hideLastN || 0;
-         console.log(`${LOG_PREFIX} Save button click: currentValue=${currentValue}`);
+         console.log(`[${extensionName}] Save button: Current saved value: ${currentValue}`);
 
         // 只有当设置实际发生变化时才保存和更新
         if (valueToSave !== currentValue) {
-            console.log(`${LOG_PREFIX} Save button click: Value changed (${currentValue} -> ${valueToSave}). Proceeding with save...`);
+            console.log(`[${extensionName}] Save button: Value changed from ${currentValue} to ${valueToSave}. Proceeding with save.`);
+            // 显示加载指示器
             const $btn = $(this);
             const originalText = $btn.text();
             $btn.text('保存中...').prop('disabled', true);
-            console.log(`${LOG_PREFIX} Save button click: Button state set to saving.`);
-
-            const success = await saveCurrentHideSettings(valueToSave); // 会打印详细日志
+            console.log(`[${extensionName}] Save button: Calling saveCurrentHideSettings(${valueToSave}).`);
+            const success = await saveCurrentHideSettings(valueToSave);
+             console.log(`[${extensionName}] Save button: saveCurrentHideSettings returned: ${success}`);
 
             if (success) {
-                console.log(`${LOG_PREFIX} Save successful. Running full hide check and updating display.`);
+                console.log(`[${extensionName}] Save button: Save successful. Running full check and updating display.`);
                 // 仅在成功保存后运行全量检查
-                runFullHideCheck(); // 立即执行全量检查以应用新设置
-                updateCurrentHideSettingsDisplay(); // 更新显示
+                runFullHideCheck(); // 注意：这里直接调用，没有防抖，因为是用户明确操作
+                updateCurrentHideSettingsDisplay();
                 toastr.success('隐藏设置已保存');
             } else {
-                 console.error(`${ERR_PREFIX} Save failed. Check previous logs.`);
-                 // 可以在这里恢复输入框的值到保存前的值吗？可能复杂
+                 console.error(`[${extensionName}] Save button: Save failed.`);
+                 // 错误消息应该由 saveCurrentHideSettings 内部处理
             }
 
             // 恢复按钮状态
+             console.log(`[${extensionName}] Save button: Restoring button state.`);
             $btn.text(originalText).prop('disabled', false);
-            console.log(`${LOG_PREFIX} Save button click: Button state restored.`);
         } else {
-            console.log(`${LOG_PREFIX} Save button click: Value unchanged (${currentValue}). No API call needed.`);
+            console.log(`[${extensionName}] Save button: Value (${valueToSave}) hasn't changed from current (${currentValue}). Skipping save.`);
             toastr.info('设置未更改');
         }
-         // 不论是否保存，都关闭 popup？或者让用户手动关？ 目前：不自动关闭
-         // $('#hide-helper-popup').hide();
     });
 
-    // 全部取消隐藏按钮 (现在是 async, 使用事件委托)
-    $(document).on('click', '#hide-unhide-all-btn', async function() {
-        console.log(`${LOG_PREFIX} Unhide all button clicked.`);
-        const $btn = $(this);
-        const originalText = $btn.text();
-        $btn.text('处理中...').prop('disabled', true);
-
-        await unhideAllMessages(); // 会打印详细日志
-
-        $btn.text(originalText).prop('disabled', false);
-        console.log(`${LOG_PREFIX} Unhide all button state restored.`);
-         // updateCurrentHideSettingsDisplay(); // unhideAllMessages 内部成功时会调用
-         // $('#hide-helper-popup').hide(); // 关闭 popup?
+    // 全部取消隐藏按钮 (现在是 async)
+    console.log(`[${extensionName}] Setting up click listener for #hide-unhide-all-btn.`);
+    $('#hide-unhide-all-btn').on('click', async function() { // 改为 async
+        console.log(`[${extensionName}] Unhide all button clicked.`);
+        await unhideAllMessages(); // 使用 await 调用
+        console.log(`[${extensionName}] Unhide all process finished.`);
+        // 成功或失败的消息已在 unhideAllMessages 中处理
     });
 
-    // --- 核心事件监听 ---
+    // --- 重要：监听核心事件 ---
 
-    // 监听聊天切换事件
-    eventSource.on(event_types.CHAT_CHANGED, () => {
-        console.log(`%c${LOG_PREFIX} Event received: ${event_types.CHAT_CHANGED}`, 'color: blue; font-weight: bold;');
+    // 监听聊天切换事件 (包括切换角色/群组，以及切换同一角色/群组的不同聊天记录)
+    console.log(`[${extensionName}] Setting up listener for event: ${event_types.CHAT_CHANGED}`);
+    eventSource.on(event_types.CHAT_CHANGED, (data) => { // 添加 data 参数以获取更多信息
+        console.log(`[${extensionName}] Event received: ${event_types.CHAT_CHANGED}`, data); // 记录事件数据
+        console.log(`[${extensionName}] CHAT_CHANGED: Clearing context cache.`);
         cachedContext = null; // 清除上下文缓存
-        console.log(`${LOG_PREFIX} Cleared context cache due to chat change.`);
 
-        // 延迟执行，等待 SillyTavern 加载完新聊天数据
-        setTimeout(() => {
-            console.log(`${LOG_PREFIX} CHAT_CHANGED timeout triggered. Updating UI and running check...`);
-            const context = getContextOptimized(); // 获取新上下文
-            if (!context) {
-                console.error(`${ERR_PREFIX} CHAT_CHANGED timeout: Failed to get context after chat change.`);
-                return;
-            }
-             console.log(`${LOG_PREFIX} CHAT_CHANGED timeout: New context - charId=${context.characterId}, groupId=${context.groupId}, chatLength=${context.chat?.length}`);
+        // 获取新上下文信息（用于日志）
+        const newContext = getContextOptimized();
+        const newCharId = newContext?.characterId;
+        const newGroupId = newContext?.groupId;
+        const newChatLength = newContext?.chat?.length;
+        console.log(`[${extensionName}] CHAT_CHANGED: New context info - CharacterId: ${newCharId}, GroupId: ${newGroupId}, Chat Length: ${newChatLength}`);
 
 
-            // 更新全局启用/禁用状态显示
-             const globalToggle = $('#hide-helper-toggle');
-             if (globalToggle.length) {
-                 globalToggle.val(extension_settings[extensionName].enabled ? 'enabled' : 'disabled');
-                 console.log(`${LOG_PREFIX} CHAT_CHANGED timeout: Updated global toggle display.`);
-             } else {
-                 console.warn(`${LOG_PREFIX} CHAT_CHANGED timeout: Global toggle #hide-helper-toggle not found.`);
-             }
+        console.log(`[${extensionName}] CHAT_CHANGED: Updating global toggle display.`);
+        // 更新全局启用/禁用状态显示
+        $('#hide-helper-toggle').val(extension_settings[extensionName].enabled ? 'enabled' : 'disabled');
 
+        console.log(`[${extensionName}] CHAT_CHANGED: Updating current hide settings display for new chat.`);
+        // 更新当前角色的设置显示和输入框
+        updateCurrentHideSettingsDisplay();
 
-            // 更新当前角色的设置显示和输入框 (在 popup 打开时才重要，但这里调用以保持一致)
-            updateCurrentHideSettingsDisplay(); // 会打印日志
-
-            // 聊天切换时执行全量检查 (如果插件启用)
-            if (extension_settings[extensionName].enabled) {
-                console.log(`${LOG_PREFIX} CHAT_CHANGED timeout: Plugin enabled. Calling runFullHideCheckDebounced().`);
-                runFullHideCheckDebounced(); // 使用防抖全量检查
-            } else {
-                 console.log(`${LOG_PREFIX} CHAT_CHANGED timeout: Plugin disabled. Skipping full check.`);
-            }
-        }, 500); // 增加延迟，给 ST 更多时间加载聊天内容和更新上下文
+        // 聊天切换时执行全量检查 (如果插件启用)
+        if (extension_settings[extensionName].enabled) {
+            console.log(`[${extensionName}] CHAT_CHANGED: Extension is enabled. Scheduling debounced full hide check.`);
+            runFullHideCheckDebounced();
+        } else {
+            console.log(`[${extensionName}] CHAT_CHANGED: Extension is disabled. Skipping full hide check.`);
+        }
     });
 
-    // 监听新消息事件 (发送和接收) - 使用增量检查可能不可靠，改为全量检查
-    const handleNewMessage = (eventType) => {
-         console.log(`${LOG_PREFIX} Event received: ${eventType}`);
-         if (extension_settings[extensionName].enabled) {
-             // 增量检查逻辑复杂且可能因ST内部状态不一致而出错
-             // 改为触发防抖的全量检查，更稳妥
-             console.log(`${LOG_PREFIX} New message event: Plugin enabled. Calling runFullHideCheckDebounced().`);
-             runFullHideCheckDebounced();
-             // 如果坚持用增量：
-             // console.log(`${LOG_PREFIX} New message event: Plugin enabled. Calling runIncrementalHideCheck() after delay.`);
-             // setTimeout(() => runIncrementalHideCheck(), 100); // 稍微延迟
-         } else {
-             // console.log(`${LOG_PREFIX} New message event: Plugin disabled. Skipping check.`); // 减少噪音
-         }
+    // 监听新消息事件 (发送和接收)
+    const handleNewMessage = (eventType) => { // 添加 eventType 用于日志
+        console.debug(`[${extensionName} DEBUG] Event received: ${eventType}`);
+        if (extension_settings[extensionName].enabled) {
+            console.debug(`[${extensionName} DEBUG] ${eventType}: Extension enabled. Scheduling incremental hide check.`);
+            // 使用增量检查，稍作延迟以确保DOM更新和 chat 数组稳定
+            setTimeout(() => runIncrementalHideCheck(), 100); // 增加一点延迟到100ms
+        } else {
+             console.debug(`[${extensionName} DEBUG] ${eventType}: Extension disabled. Skipping incremental check.`);
+        }
     };
+    console.log(`[${extensionName}] Setting up listener for event: ${event_types.MESSAGE_RECEIVED}`);
     eventSource.on(event_types.MESSAGE_RECEIVED, () => handleNewMessage(event_types.MESSAGE_RECEIVED));
+    console.log(`[${extensionName}] Setting up listener for event: ${event_types.MESSAGE_SENT}`);
     eventSource.on(event_types.MESSAGE_SENT, () => handleNewMessage(event_types.MESSAGE_SENT));
 
 
     // 监听消息删除事件
+    console.log(`[${extensionName}] Setting up listener for event: ${event_types.MESSAGE_DELETED}`);
     eventSource.on(event_types.MESSAGE_DELETED, () => {
-        console.log(`${LOG_PREFIX} Event received: ${event_types.MESSAGE_DELETED}`);
+        console.log(`[${extensionName}] Event received: ${event_types.MESSAGE_DELETED}`);
         if (extension_settings[extensionName].enabled) {
-             console.log(`${LOG_PREFIX} Message deleted event: Plugin enabled. Calling runFullHideCheckDebounced().`);
+            console.log(`[${extensionName}] ${event_types.MESSAGE_DELETED}: Extension enabled. Scheduling debounced full hide check.`);
             runFullHideCheckDebounced(); // 使用防抖全量检查
         } else {
-            // console.log(`${LOG_PREFIX} Message deleted event: Plugin disabled. Skipping check.`); // 减少噪音
+             console.log(`[${extensionName}] ${event_types.MESSAGE_DELETED}: Extension disabled. Skipping full check.`);
         }
     });
 
-    // 监听流式响应结束事件 (非常重要，此时消息内容和数量稳定)
-    // 注意：SillyTavern 可能没有统一的 STREAM_END 事件， MESSAGE_RECEIVED 可能在流式期间多次触发
-    // 可能需要监听 GENERATION_ENDED 或者依赖 MESSAGE_RECEIVED/SENT 的防抖
-    // 如果 GENERATION_ENDED 可用且在流结束后触发，会更好
-     eventSource.on(event_types.GENERATION_ENDED, () => { // 假设有这个事件
-         console.log(`${LOG_PREFIX} Event received: ${event_types.GENERATION_ENDED}`);
+    // 监听流式响应结束事件 (可能导致多条消息状态更新)
+    // 注意: SillyTavern 中 stream 结束的事件可能是 GENERATION_ENDED 或其他，确认一下 event_types
+    // 假设 event_types.STREAM_END 存在且正确
+    const streamEndEvent = event_types.GENERATION_ENDED; // 使用 GENERATION_ENDED 更可靠
+    console.log(`[${extensionName}] Setting up listener for event: ${streamEndEvent} (assuming this indicates stream end)`);
+    eventSource.on(streamEndEvent, () => {
+         console.log(`[${extensionName}] Event received: ${streamEndEvent}`);
          if (extension_settings[extensionName].enabled) {
-            console.log(`${LOG_PREFIX} Generation ended event: Plugin enabled. Calling runFullHideCheckDebounced().`);
+            console.log(`[${extensionName}] ${streamEndEvent}: Extension enabled. Scheduling debounced full hide check after stream end.`);
+            // 流结束后，消息数量可能已稳定，执行一次增量检查可能不够，全量检查更保险
             runFullHideCheckDebounced();
         } else {
-            // console.log(`${LOG_PREFIX} Generation ended event: Plugin disabled. Skipping check.`); // 减少噪音
+             console.log(`[${extensionName}] ${streamEndEvent}: Extension disabled. Skipping full check.`);
         }
-     });
-     // 如果没有 GENERATION_ENDED, MESSAGE_RECEIVED/SENT 的防抖是次优选择
+    });
 
-    console.log(`${LOG_PREFIX} Event listeners setup complete.`);
+    console.log(`[${extensionName}] Exiting setupEventListeners.`);
 }
 
 // 初始化扩展
 jQuery(async () => {
-    console.log(`${LOG_PREFIX} Initializing extension...`);
+    console.log(`[${extensionName}] Initializing extension (jQuery ready)...`);
     loadSettings(); // 加载全局启用状态
     createUI(); // 创建界面元素
 
     // 初始加载时更新显示并执行检查
-    // 延迟执行以确保 SillyTavern 的上下文和其他扩展已准备好
-    console.log(`${LOG_PREFIX} Scheduling initial check and UI update...`);
+    // 延迟执行以确保 SillyTavern 的上下文已准备好
+    const initialDelay = 1500; // 保持1.5秒延迟
+    console.log(`[${extensionName}] Scheduling initial setup tasks with delay: ${initialDelay}ms`);
     setTimeout(() => {
-         console.log(`${LOG_PREFIX} Initial timeout triggered. Performing initial setup...`);
-         try {
-             // 设置全局启用/禁用选择框的当前值
-             const globalToggle = $('#hide-helper-toggle');
-             if (globalToggle.length) {
-                 globalToggle.val(extension_settings[extensionName].enabled ? 'enabled' : 'disabled');
-                 console.log(`${LOG_PREFIX} Initial setup: Global toggle set to ${extension_settings[extensionName].enabled ? 'enabled' : 'disabled'}.`);
-             } else {
-                 console.warn(`${LOG_PREFIX} Initial setup: Global toggle #hide-helper-toggle not found.`);
-             }
+        console.log(`[${extensionName}] Running initial setup tasks after delay.`);
 
-             // 更新当前设置显示和输入框 (如果 popup 打开时才可见)
-             updateCurrentHideSettingsDisplay(); // 会打印日志
+        console.log(`[${extensionName}] Initial setup: Setting global toggle display.`);
+        // 设置全局启用/禁用选择框的当前值
+        $('#hide-helper-toggle').val(extension_settings[extensionName].enabled ? 'enabled' : 'disabled');
 
-             // 初始加载时执行全量检查 (如果插件启用且当前角色/群组有用户配置)
-             if (extension_settings[extensionName].enabled) {
-                  console.log(`${LOG_PREFIX} Initial setup: Plugin enabled. Checking if initial full check is needed...`);
-                 const initialSettings = getCurrentHideSettings(); // 会打印日志
-                 if(initialSettings?.userConfigured === true) {
-                     console.log(`${LOG_PREFIX} Initial setup: User configured settings found. Running initial full check.`);
-                     runFullHideCheck(); // 首次加载直接运行，不用防抖
-                 } else {
-                      console.log(`${LOG_PREFIX} Initial setup: No user configured settings found for current context. Skipping initial full check.`);
-                 }
-             } else {
-                  console.log(`${LOG_PREFIX} Initial setup: Plugin disabled. Skipping initial check.`);
-             }
-         } catch (error) {
-             console.error(`${ERR_PREFIX} Error during initial setup timeout:`, error);
-         }
-         console.log(`${LOG_PREFIX} Initial setup complete.`);
-    }, 2000); // 增加延迟时间 (2秒) 以确保 ST 完全加载
+        console.log(`[${extensionName}] Initial setup: Updating current hide settings display.`);
+        // 更新当前设置显示和输入框
+        updateCurrentHideSettingsDisplay();
+
+        // 初始加载时执行全量检查 (如果插件启用且有用户配置)
+        if (extension_settings[extensionName].enabled) {
+            console.log(`[${extensionName}] Initial setup: Extension is enabled. Checking if initial full check is needed.`);
+            const initialSettings = getCurrentHideSettings();
+             console.log(`[${extensionName}] Initial setup: Read initial settings:`, initialSettings);
+            // 只有当 getCurrentHideSettings 返回非 null 且 userConfigured 为 true 时才执行初始检查
+            // 避免在用户从未设置过的情况下隐藏消息
+            if(initialSettings?.userConfigured === true) {
+                console.log(`[${extensionName}] Initial setup: User configured settings found. Running initial full hide check.`);
+                runFullHideCheck(); // 直接运行，非防抖
+            } else {
+                console.log(`[${extensionName}] Initial setup: No user configured settings found for the current entity. Skipping initial full check.`);
+            }
+        } else {
+             console.log(`[${extensionName}] Initial setup: Extension is disabled. Skipping initial full check.`);
+        }
+        console.log(`[${extensionName}] Initial setup tasks completed.`);
+    }, initialDelay); // 增加延迟时间
 });
